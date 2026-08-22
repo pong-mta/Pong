@@ -13,12 +13,42 @@ use Illuminate\Support\Str;
 
 class GroceryCheckoutController extends Controller
 {
+    /*
+    |--------------------------------------------------------------------------
+    | DELIVERY PRICING
+    |--------------------------------------------------------------------------
+    |
+    | First 4 km  = ₱30
+    | Every started kilometer after 4 km = ₱10
+    |
+    */
+
+    private const BASE_DISTANCE_KM = 4.0;
+
+    private const BASE_DELIVERY_FEE = 30.00;
+
+    private const ADDITIONAL_KM_FEE = 10.00;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CHECKOUT
+    |--------------------------------------------------------------------------
+    */
+
     public function checkout(
         Request $request,
         GroceryOrderNotificationService $notificationService
     ): JsonResponse {
 
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDATE REQUEST
+        |--------------------------------------------------------------------------
+        */
+
         $validated = $request->validate([
+
             'fulfillment_type' => [
                 'required',
                 'in:delivery,pickup',
@@ -47,9 +77,18 @@ class GroceryCheckoutController extends Controller
                 'string',
                 'max:1000',
             ],
+
         ]);
 
+
+        /*
+        |--------------------------------------------------------------------------
+        | AUTHENTICATED USER
+        |--------------------------------------------------------------------------
+        */
+
         $user = $request->user();
+
 
         /*
         |--------------------------------------------------------------------------
@@ -62,25 +101,49 @@ class GroceryCheckoutController extends Controller
             &&
             empty($validated['delivery_address'])
         ) {
+
             return response()->json([
                 'success' => false,
+
                 'message' =>
                 'Delivery address is required.',
+
             ], 422);
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DELIVERY LOCATION VALIDATION
+        |--------------------------------------------------------------------------
+        |
+        | Delivery orders MUST contain GPS coordinates.
+        |
+        */
+
+        if (
+            $validated['fulfillment_type'] === 'delivery'
+            &&
+            (
+                !isset($validated['delivery_latitude'])
+                ||
+                !isset($validated['delivery_longitude'])
+            )
+        ) {
+
+            return response()->json([
+                'success' => false,
+
+                'message' =>
+                'Your current location is required for delivery.',
+            ], 422);
+        }
+
 
         /*
         |--------------------------------------------------------------------------
         | CREATE ORDER
         |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | FCM and SMS are NOT sent inside this transaction.
-        |
-        | First we make sure the order is successfully committed.
-        | Only after that do we send notifications.
-        |
         */
 
         $order = DB::transaction(
@@ -111,6 +174,7 @@ class GroceryCheckoutController extends Controller
                     ->lockForUpdate()
                     ->first();
 
+
                 /*
                 |--------------------------------------------------------------------------
                 | NO CART
@@ -123,6 +187,7 @@ class GroceryCheckoutController extends Controller
                         'Your cart is empty.'
                     );
                 }
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -139,6 +204,21 @@ class GroceryCheckoutController extends Controller
                     );
                 }
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | CHECK STORE
+                |--------------------------------------------------------------------------
+                */
+
+                if (!$cart->store) {
+
+                    throw new \RuntimeException(
+                        'The store associated with your cart no longer exists.'
+                    );
+                }
+
+
                 /*
                 |--------------------------------------------------------------------------
                 | CHECK PRODUCTS / STOCK / PRICE
@@ -148,6 +228,7 @@ class GroceryCheckoutController extends Controller
                 $subtotal = 0;
 
                 $lockedItems = [];
+
 
                 foreach (
                     $cart->items as $cartItem
@@ -166,6 +247,7 @@ class GroceryCheckoutController extends Controller
                         ->lockForUpdate()
                         ->first();
 
+
                     /*
                     |--------------------------------------------------------------------------
                     | PRODUCT DOES NOT EXIST
@@ -178,6 +260,7 @@ class GroceryCheckoutController extends Controller
                             'A product in your cart no longer exists.'
                         );
                     }
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -197,6 +280,7 @@ class GroceryCheckoutController extends Controller
                             "{$variant->name} is no longer available."
                         );
                     }
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -219,6 +303,7 @@ class GroceryCheckoutController extends Controller
                         );
                     }
 
+
                     /*
                     |--------------------------------------------------------------------------
                     | STOCK CHECK
@@ -236,6 +321,7 @@ class GroceryCheckoutController extends Controller
                         );
                     }
 
+
                     /*
                     |--------------------------------------------------------------------------
                     | USE CURRENT DATABASE PRICE
@@ -246,18 +332,23 @@ class GroceryCheckoutController extends Controller
                         (float)
                         $variant->price;
 
+
                     $quantity =
                         (int)
                         $cartItem->quantity;
+
 
                     $itemSubtotal =
                         $unitPrice *
                         $quantity;
 
+
                     $subtotal +=
                         $itemSubtotal;
 
+
                     $lockedItems[] = [
+
                         'variant' =>
                         $variant,
 
@@ -269,8 +360,10 @@ class GroceryCheckoutController extends Controller
 
                         'subtotal' =>
                         $itemSubtotal,
+
                     ];
                 }
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -278,11 +371,147 @@ class GroceryCheckoutController extends Controller
                 |--------------------------------------------------------------------------
                 */
 
-                $deliveryFee = 0;
+                $deliveryFee = 0.00;
+
+                $deliveryDistanceKm = null;
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | CALCULATE DELIVERY FEE
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    $validated['fulfillment_type']
+                    ===
+                    'delivery'
+                ) {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | STORE LOCATION
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $storeLatitude =
+                        $cart->store->latitude;
+
+                    $storeLongitude =
+                        $cart->store->longitude;
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | STORE MUST HAVE LOCATION
+                    |--------------------------------------------------------------------------
+                    */
+
+                    if (
+                        $storeLatitude === null
+                        ||
+                        $storeLongitude === null
+                    ) {
+
+                        throw new \RuntimeException(
+                            'This store does not have a delivery location configured.'
+                        );
+                    }
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CUSTOMER LOCATION
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $customerLatitude =
+                        (float)
+                        $validated['delivery_latitude'];
+
+                    $customerLongitude =
+                        (float)
+                        $validated['delivery_longitude'];
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CALCULATE DISTANCE
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $deliveryDistanceKm =
+                        $this->calculateDistanceKm(
+                            (float)
+                            $storeLatitude,
+
+                            (float)
+                            $storeLongitude,
+
+                            $customerLatitude,
+
+                            $customerLongitude
+                        );
+
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | CALCULATE FEE
+                    |--------------------------------------------------------------------------
+                    |
+                    | 0–4 km = ₱30
+                    |
+                    | Beyond 4 km:
+                    |
+                    | ₱30 + ₱10 for every started kilometer.
+                    |
+                    */
+
+                    if (
+                        $deliveryDistanceKm
+                        <=
+                        self::BASE_DISTANCE_KM
+                    ) {
+
+                        $deliveryFee =
+                            self::BASE_DELIVERY_FEE;
+                    } else {
+
+                        $additionalDistance =
+                            $deliveryDistanceKm
+                            -
+                            self::BASE_DISTANCE_KM;
+
+
+                        $additionalKilometers =
+                            (int)
+                            ceil(
+                                $additionalDistance
+                            );
+
+
+                        $deliveryFee =
+                            self::BASE_DELIVERY_FEE
+                            +
+                            (
+                                $additionalKilometers
+                                *
+                                self::ADDITIONAL_KM_FEE
+                            );
+                    }
+                }
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | TOTAL
+                |--------------------------------------------------------------------------
+                */
 
                 $total =
                     $subtotal +
                     $deliveryFee;
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -308,6 +537,7 @@ class GroceryCheckoutController extends Controller
                     )->exists()
                 );
 
+
                 /*
                 |--------------------------------------------------------------------------
                 | CREATE ORDER
@@ -315,6 +545,7 @@ class GroceryCheckoutController extends Controller
                 */
 
                 $order = Order::create([
+
                     'user_id' =>
                     $user->id,
 
@@ -350,7 +581,9 @@ class GroceryCheckoutController extends Controller
 
                     'notes' =>
                     $validated['notes'] ?? null,
+
                 ]);
+
 
                 /*
                 |--------------------------------------------------------------------------
@@ -365,14 +598,18 @@ class GroceryCheckoutController extends Controller
                     $variant =
                         $data['variant'];
 
+
                     $quantity =
                         $data['quantity'];
+
 
                     $unitPrice =
                         $data['unit_price'];
 
+
                     $itemSubtotal =
                         $data['subtotal'];
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -381,6 +618,7 @@ class GroceryCheckoutController extends Controller
                     */
 
                     $order->items()->create([
+
                         'product_variant_id' =>
                         $variant->id,
 
@@ -403,7 +641,9 @@ class GroceryCheckoutController extends Controller
 
                         'subtotal' =>
                         $itemSubtotal,
+
                     ]);
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -417,6 +657,7 @@ class GroceryCheckoutController extends Controller
                     );
                 }
 
+
                 /*
                 |--------------------------------------------------------------------------
                 | DELETE TEMPORARY CART
@@ -425,15 +666,17 @@ class GroceryCheckoutController extends Controller
 
                 $cart->delete();
 
+
                 /*
                 |--------------------------------------------------------------------------
-                | RETURN ORDER FROM TRANSACTION
+                | RETURN ORDER
                 |--------------------------------------------------------------------------
                 */
 
                 return $order;
             }
         );
+
 
         /*
         |--------------------------------------------------------------------------
@@ -447,24 +690,11 @@ class GroceryCheckoutController extends Controller
             'items',
         ]);
 
+
         /*
         |--------------------------------------------------------------------------
         | SEND ORDER PLACED NOTIFICATIONS
         |--------------------------------------------------------------------------
-        |
-        | At this point the database transaction has already committed.
-        |
-        | Therefore:
-        |
-        | Order exists
-        | Stock is deducted
-        | Cart is deleted
-        |
-        | Now send:
-        |
-        | FCM
-        | SMS
-        |
         */
 
         try {
@@ -477,7 +707,7 @@ class GroceryCheckoutController extends Controller
 
             /*
             |--------------------------------------------------------------------------
-            | IMPORTANT:
+            | IMPORTANT
             |--------------------------------------------------------------------------
             |
             | Notification failure must NOT make
@@ -489,6 +719,7 @@ class GroceryCheckoutController extends Controller
             \Log::error(
                 'GROCERY ORDER NOTIFICATION ERROR',
                 [
+
                     'order_id' =>
                     $order->id,
 
@@ -497,9 +728,11 @@ class GroceryCheckoutController extends Controller
 
                     'error' =>
                     $e->getMessage(),
+
                 ]
             );
         }
+
 
         /*
         |--------------------------------------------------------------------------
@@ -508,12 +741,14 @@ class GroceryCheckoutController extends Controller
         */
 
         return response()->json([
+
             'success' => true,
 
             'message' =>
             'Order placed successfully.',
 
             'order' => [
+
                 'id' =>
                 $order->id,
 
@@ -526,9 +761,17 @@ class GroceryCheckoutController extends Controller
                 'fulfillment_type' =>
                 $order->fulfillment_type,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | STORE
+                |--------------------------------------------------------------------------
+                */
+
                 'store' =>
                 $order->store
                     ? [
+
                         'id' =>
                         $order
                             ->store
@@ -548,8 +791,17 @@ class GroceryCheckoutController extends Controller
                         $order
                             ->store
                             ->logo,
+
                     ]
+
                     : null,
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | ITEMS
+                |--------------------------------------------------------------------------
+                */
 
                 'items' =>
                 $order
@@ -558,6 +810,7 @@ class GroceryCheckoutController extends Controller
                         function ($item) {
 
                             return [
+
                                 'id' =>
                                 $item->id,
 
@@ -599,10 +852,18 @@ class GroceryCheckoutController extends Controller
                                     '.',
                                     ''
                                 ),
+
                             ];
                         }
                     )
                     ->values(),
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | SUBTOTAL
+                |--------------------------------------------------------------------------
+                */
 
                 'subtotal' =>
                 number_format(
@@ -613,6 +874,13 @@ class GroceryCheckoutController extends Controller
                     ''
                 ),
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | DELIVERY FEE
+                |--------------------------------------------------------------------------
+                */
+
                 'delivery_fee' =>
                 number_format(
                     (float)
@@ -621,6 +889,13 @@ class GroceryCheckoutController extends Controller
                     '.',
                     ''
                 ),
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | TOTAL
+                |--------------------------------------------------------------------------
+                */
 
                 'total' =>
                 number_format(
@@ -631,24 +906,171 @@ class GroceryCheckoutController extends Controller
                     ''
                 ),
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | DELIVERY ADDRESS
+                |--------------------------------------------------------------------------
+                */
+
                 'delivery_address' =>
                 $order
                     ->delivery_address,
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | DELIVERY LATITUDE
+                |--------------------------------------------------------------------------
+                */
 
                 'delivery_latitude' =>
                 $order
                     ->delivery_latitude,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | DELIVERY LONGITUDE
+                |--------------------------------------------------------------------------
+                */
+
                 'delivery_longitude' =>
                 $order
                     ->delivery_longitude,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | NOTES
+                |--------------------------------------------------------------------------
+                */
+
                 'notes' =>
                 $order->notes,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | CREATED
+                |--------------------------------------------------------------------------
+                */
+
                 'created_at' =>
                 $order->created_at,
+
             ],
+
         ], 201);
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | CALCULATE DISTANCE
+    |--------------------------------------------------------------------------
+    |
+    | Haversine formula.
+    |
+    | Returns distance in kilometers.
+    |
+    */
+
+    private function calculateDistanceKm(
+        float $latitudeFrom,
+        float $longitudeFrom,
+        float $latitudeTo,
+        float $longitudeTo
+    ): float {
+
+        /*
+        |--------------------------------------------------------------------------
+        | EARTH RADIUS
+        |--------------------------------------------------------------------------
+        */
+
+        $earthRadiusKm = 6371.0;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | CONVERT DEGREES TO RADIANS
+        |--------------------------------------------------------------------------
+        */
+
+        $latitudeFromRadians =
+            deg2rad(
+                $latitudeFrom
+            );
+
+        $latitudeToRadians =
+            deg2rad(
+                $latitudeTo
+            );
+
+
+        $latitudeDifference =
+            deg2rad(
+                $latitudeTo -
+                    $latitudeFrom
+            );
+
+
+        $longitudeDifference =
+            deg2rad(
+                $longitudeTo -
+                    $longitudeFrom
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | HAVERSINE
+        |--------------------------------------------------------------------------
+        */
+
+        $a =
+            sin(
+                $latitudeDifference / 2
+            )
+            *
+            sin(
+                $latitudeDifference / 2
+            )
+            +
+            cos(
+                $latitudeFromRadians
+            )
+            *
+            cos(
+                $latitudeToRadians
+            )
+            *
+            sin(
+                $longitudeDifference / 2
+            )
+            *
+            sin(
+                $longitudeDifference / 2
+            );
+
+
+        $c =
+            2 *
+            atan2(
+                sqrt($a),
+                sqrt(1 - $a)
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | DISTANCE
+        |--------------------------------------------------------------------------
+        */
+
+        return
+            $earthRadiusKm *
+            $c;
     }
 }
