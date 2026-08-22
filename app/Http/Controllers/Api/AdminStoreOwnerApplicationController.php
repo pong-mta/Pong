@@ -272,6 +272,9 @@ class AdminStoreOwnerApplicationController extends Controller
                             'name' =>
                             $application->business_name,
 
+                            'business_type' =>
+                            $application->business_type,
+
                             /*
                             |--------------------------------------------------------------------------
                             | UNIQUE SLUG
