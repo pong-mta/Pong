@@ -16,6 +16,12 @@ use App\Http\Controllers\Api\UserLocationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/', function () {
+    return response()->json([
+        "message" => "PONG is Ready!"
+    ]);
+});
+
 Route::post(
     '/register',
     [AuthController::class, 'register']
