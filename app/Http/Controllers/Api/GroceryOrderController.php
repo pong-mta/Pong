@@ -10,15 +10,77 @@ use Illuminate\Http\Request;
 class GroceryOrderController extends Controller
 {
     /**
-     * Get the authenticated user's grocery orders.
+     * Get orders for a specific store owned by
+     * the authenticated store owner.
      */
     public function index(
         Request $request
     ): JsonResponse {
+
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDATE STORE ID
+    |--------------------------------------------------------------------------
+    */
+
+        $request->validate([
+            'store_id' => [
+                'required',
+                'integer',
+            ],
+        ]);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | FIND STORE
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    | Make sure the authenticated user actually owns
+    | the requested store.
+    |
+    */
+
+        $store = \App\Models\Store::query()
+            ->where(
+                'id',
+                $request->integer('store_id')
+            )
+            ->where(
+                'owner_id',
+                $request->user()->id
+            )
+            ->first();
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | STORE NOT FOUND / NOT OWNER
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$store) {
+
+            return response()->json([
+                'success' => false,
+
+                'message' =>
+                'Store not found or you do not own this store.',
+            ], 403);
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | GET ORDERS FOR THIS STORE ONLY
+    |--------------------------------------------------------------------------
+    */
+
         $orders = Order::query()
             ->where(
-                'user_id',
-                $request->user()->id
+                'store_id',
+                $store->id
             )
             ->with([
                 'store:id,name,slug,logo',
@@ -27,12 +89,60 @@ class GroceryOrderController extends Controller
             ->latest()
             ->get();
 
+
+        /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
+
         return response()->json([
+
             'success' => true,
 
-            'orders' => $orders->map(
+
+            /*
+        |--------------------------------------------------------------------------
+        | STORE
+        |--------------------------------------------------------------------------
+        */
+
+            'store' => [
+
+                'id' =>
+                $store->id,
+
+                'name' =>
+                $store->name,
+
+                'slug' =>
+                $store->slug,
+
+                'logo' =>
+                $store->logo,
+            ],
+
+
+            /*
+        |--------------------------------------------------------------------------
+        | ORDERS
+        |--------------------------------------------------------------------------
+        */
+
+            'orders' =>
+
+            $orders->map(
+
                 function ($order) {
+
                     return [
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | ORDER
+                        |--------------------------------------------------------------------------
+                        */
+
                         'id' =>
                         $order->id,
 
@@ -45,9 +155,50 @@ class GroceryOrderController extends Controller
                         'fulfillment_type' =>
                         $order->fulfillment_type,
 
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | CUSTOMER
+                        |--------------------------------------------------------------------------
+                        |
+                        | If your Order model has a `customer`
+                        | relationship, this will work.
+                        |
+                        */
+
+                        'customer' =>
+                        $order->customer
+                            ? [
+
+                                'id' =>
+                                $order
+                                    ->customer
+                                    ->id,
+
+                                'name' =>
+                                $order
+                                    ->customer
+                                    ->name,
+
+                                'phone' =>
+                                $order
+                                    ->customer
+                                    ->phone,
+
+                            ]
+                            : null,
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | STORE
+                        |--------------------------------------------------------------------------
+                        */
+
                         'store' =>
                         $order->store
                             ? [
+
                                 'id' =>
                                 $order
                                     ->store
@@ -67,15 +218,27 @@ class GroceryOrderController extends Controller
                                 $order
                                     ->store
                                     ->logo,
+
                             ]
                             : null,
 
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | ITEMS
+                        |--------------------------------------------------------------------------
+                        */
+
                         'items' =>
+
                         $order
                             ->items
                             ->map(
+
                                 function ($item) {
+
                                     return [
+
                                         'id' =>
                                         $item->id,
 
@@ -122,6 +285,13 @@ class GroceryOrderController extends Controller
                             )
                             ->values(),
 
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | TOTALS
+                        |--------------------------------------------------------------------------
+                        */
+
                         'subtotal' =>
                         number_format(
                             (float)
@@ -149,6 +319,13 @@ class GroceryOrderController extends Controller
                             ''
                         ),
 
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | DELIVERY
+                        |--------------------------------------------------------------------------
+                        */
+
                         'delivery_address' =>
                         $order
                             ->delivery_address,
@@ -161,14 +338,29 @@ class GroceryOrderController extends Controller
                         $order
                             ->delivery_longitude,
 
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | NOTES
+                        |--------------------------------------------------------------------------
+                        */
+
                         'notes' =>
                         $order->notes,
+
+
+                        /*
+                        |--------------------------------------------------------------------------
+                        | DATE
+                        |--------------------------------------------------------------------------
+                        */
 
                         'created_at' =>
                         $order->created_at,
                     ];
                 }
-            )->values(),
+            )
+                ->values(),
         ]);
     }
 
