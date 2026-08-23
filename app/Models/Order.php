@@ -63,4 +63,12 @@ class Order extends Model
             'order_id'
         );
     }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(
+            User::class,
+            'user_id'
+        );
+    }
 }
