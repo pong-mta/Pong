@@ -129,6 +129,11 @@ Route::middleware('auth:sanctum')->group(function () {
         [GroceryCheckoutController::class, 'checkout']
     );
 
+    Route::post(
+        '/grocery/delivery-quote',
+        [GroceryCheckoutController::class, 'deliveryQuote']
+    );
+
     Route::get(
         '/grocery/orders',
         [GroceryOrderController::class, 'index']

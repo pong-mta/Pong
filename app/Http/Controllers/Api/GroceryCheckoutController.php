@@ -1073,4 +1073,262 @@ class GroceryCheckoutController extends Controller
             $earthRadiusKm *
             $c;
     }
+
+
+    /*
+|--------------------------------------------------------------------------
+| DELIVERY QUOTE
+|--------------------------------------------------------------------------
+*/
+
+    public function deliveryQuote(
+        Request $request
+    ): JsonResponse {
+
+        $validated = $request->validate([
+
+            'delivery_latitude' => [
+                'required',
+                'numeric',
+                'between:-90,90',
+            ],
+
+            'delivery_longitude' => [
+                'required',
+                'numeric',
+                'between:-180,180',
+            ],
+
+        ]);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | AUTHENTICATED USER
+    |--------------------------------------------------------------------------
+    */
+
+        $user = $request->user();
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | FIND ACTIVE CART
+    |--------------------------------------------------------------------------
+    */
+
+        $cart = Cart::query()
+            ->where(
+                'user_id',
+                $user->id
+            )
+            ->where(
+                'status',
+                'active'
+            )
+            ->with('store')
+            ->first();
+
+
+        if (!$cart) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Your cart is empty.',
+            ], 422);
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CHECK STORE
+    |--------------------------------------------------------------------------
+    */
+
+        if (!$cart->store) {
+
+            return response()->json([
+                'success' => false,
+                'message' =>
+                'The store associated with your cart no longer exists.',
+            ], 422);
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | STORE LOCATION
+    |--------------------------------------------------------------------------
+    */
+
+        $storeLatitude =
+            $cart->store->latitude;
+
+        $storeLongitude =
+            $cart->store->longitude;
+
+
+        if (
+            $storeLatitude === null ||
+            $storeLongitude === null
+        ) {
+
+            return response()->json([
+                'success' => false,
+                'message' =>
+                'This store does not have a delivery location configured.',
+            ], 422);
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CUSTOMER LOCATION
+    |--------------------------------------------------------------------------
+    */
+
+        $customerLatitude =
+            (float) $validated['delivery_latitude'];
+
+        $customerLongitude =
+            (float) $validated['delivery_longitude'];
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATE DISTANCE
+    |--------------------------------------------------------------------------
+    */
+
+        $deliveryDistanceKm =
+            $this->calculateDistanceKm(
+
+                (float) $storeLatitude,
+
+                (float) $storeLongitude,
+
+                $customerLatitude,
+
+                $customerLongitude
+
+            );
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATE DELIVERY FEE
+    |--------------------------------------------------------------------------
+    |
+    | 0–4 km = ₱30
+    | Beyond 4 km = ₱30 + ₱10 for every started kilometer
+    |
+    */
+
+        if (
+            $deliveryDistanceKm <=
+            self::BASE_DISTANCE_KM
+        ) {
+
+            $deliveryFee =
+                self::BASE_DELIVERY_FEE;
+        } else {
+
+            $additionalDistance =
+                $deliveryDistanceKm -
+                self::BASE_DISTANCE_KM;
+
+            $additionalKilometers =
+                (int) ceil(
+                    $additionalDistance
+                );
+
+            $deliveryFee =
+                self::BASE_DELIVERY_FEE
+                +
+                (
+                    $additionalKilometers
+                    *
+                    self::ADDITIONAL_KM_FEE
+                );
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | CALCULATE CART SUBTOTAL
+    |--------------------------------------------------------------------------
+    */
+
+        $subtotal = 0;
+
+
+        foreach (
+            $cart->items()->with('productVariant')->get()
+            as $cartItem
+        ) {
+
+            if (!$cartItem->productVariant) {
+                continue;
+            }
+
+            $subtotal +=
+                (float) $cartItem->productVariant->price
+                *
+                (int) $cartItem->quantity;
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | TOTAL
+    |--------------------------------------------------------------------------
+    */
+
+        $total =
+            $subtotal +
+            $deliveryFee;
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
+
+        return response()->json([
+
+            'success' => true,
+
+            'distance_km' =>
+            round(
+                $deliveryDistanceKm,
+                2
+            ),
+
+            'delivery_fee' =>
+            number_format(
+                $deliveryFee,
+                2,
+                '.',
+                ''
+            ),
+
+            'subtotal' =>
+            number_format(
+                $subtotal,
+                2,
+                '.',
+                ''
+            ),
+
+            'total' =>
+            number_format(
+                $total,
+                2,
+                '.',
+                ''
+            ),
+
+        ]);
+    }
 }
