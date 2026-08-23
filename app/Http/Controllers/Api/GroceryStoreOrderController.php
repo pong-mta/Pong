@@ -76,8 +76,8 @@ class GroceryStoreOrderController extends Controller
 
 
     /**
-     * Get orders belonging to stores owned by
-     * the authenticated user.
+     * Get orders belonging to the selected store
+     * owned by the authenticated user.
      */
     public function index(
         Request $request
@@ -86,29 +86,49 @@ class GroceryStoreOrderController extends Controller
         $user = $request->user();
 
         /*
-        |--------------------------------------------------------------------------
-        | GET STORE IDS
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | VALIDATE STORE ID
+    |--------------------------------------------------------------------------
+    */
 
-        $storeIds = Store::query()
-            ->where(
-                'owner_id',
-                $user->id
-            )
-            ->pluck('id');
+        $validated = $request->validate([
+            'store_id' => [
+                'required',
+                'integer',
+                'exists:stores,id',
+            ],
+        ]);
+
+        $storeId = (int) $validated['store_id'];
 
         /*
-        |--------------------------------------------------------------------------
-        | GET ORDERS
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | VERIFY STORE OWNERSHIP
+    |--------------------------------------------------------------------------
+    */
+
+        $store = Store::query()
+            ->where('id', $storeId)
+            ->where('owner_id', $user->id)
+            ->first();
+
+        if (!$store) {
+
+            return response()->json([
+                'success' => false,
+                'message' =>
+                'You are not authorized to access this store.',
+            ], 403);
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | GET ORDERS FOR THIS STORE ONLY
+    |--------------------------------------------------------------------------
+    */
 
         $orders = Order::query()
-            ->whereIn(
-                'store_id',
-                $storeIds
-            )
+            ->where('store_id', $store->id)
             ->with([
                 'store:id,name,slug,logo',
                 'user:id,name,phone',
@@ -118,13 +138,18 @@ class GroceryStoreOrderController extends Controller
             ->get();
 
         /*
-        |--------------------------------------------------------------------------
-        | RETURN
-        |--------------------------------------------------------------------------
-        */
+    |--------------------------------------------------------------------------
+    | RETURN
+    |--------------------------------------------------------------------------
+    */
 
         return response()->json([
             'success' => true,
+
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+            ],
 
             'orders' => $orders
                 ->map(
@@ -134,7 +159,6 @@ class GroceryStoreOrderController extends Controller
                 ->values(),
         ]);
     }
-
 
     /**
      * Update the status of a grocery order.
