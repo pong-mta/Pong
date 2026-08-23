@@ -284,4 +284,26 @@ Route::middleware('auth:sanctum')->group(function () {
             'ownerStores',
         ]
     );
+
+    /*
+    |--------------------------------------------------------------------------
+    | STORE OWNER — STORE SETTINGS
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/grocery/store/{store}/settings',
+        [
+            GroceryStoreController::class,
+            'ownerStore',
+        ]
+    );
+
+    Route::put(
+        '/grocery/store/{store}/settings',
+        [
+            GroceryStoreController::class,
+            'updateOwnerStore',
+        ]
+    );
 });

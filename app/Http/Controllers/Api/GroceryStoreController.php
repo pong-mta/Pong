@@ -321,4 +321,260 @@ class GroceryStoreController extends Controller
 
         ]);
     }
+
+
+    /*
+|--------------------------------------------------------------------------
+| STORE OWNER — SHOW STORE SETTINGS
+|--------------------------------------------------------------------------
+*/
+
+    public function ownerStore(
+        Request $request,
+        int $store
+    ): JsonResponse {
+
+        $storeModel =
+            Store::query()
+            ->where(
+                'id',
+                $store
+            )
+            ->where(
+                'owner_id',
+                $request->user()->id
+            )
+            ->first();
+
+
+        if (!$storeModel) {
+
+            return response()->json([
+                'success' => false,
+
+                'message' =>
+                'Store not found or you do not own this store.',
+            ], 403);
+        }
+
+
+        return response()->json([
+
+            'success' => true,
+
+            'store' => [
+                'id' =>
+                $storeModel->id,
+
+                'name' =>
+                $storeModel->name,
+
+                'slug' =>
+                $storeModel->slug,
+
+                'business_type' =>
+                $storeModel->business_type,
+
+                'description' =>
+                $storeModel->description,
+
+                'phone' =>
+                $storeModel->phone,
+
+                'address' =>
+                $storeModel->address,
+
+                'latitude' =>
+                $storeModel->latitude,
+
+                'longitude' =>
+                $storeModel->longitude,
+
+                'logo' =>
+                $storeModel->logo,
+
+                'is_active' =>
+                (bool) $storeModel->is_active,
+            ],
+        ]);
+    }
+
+
+    /*
+|--------------------------------------------------------------------------
+| STORE OWNER — UPDATE STORE SETTINGS
+|--------------------------------------------------------------------------
+*/
+
+    public function updateOwnerStore(
+        Request $request,
+        int $store
+    ): JsonResponse {
+
+        /*
+    |--------------------------------------------------------------------------
+    | FIND STORE
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    |
+    | The owner ID check prevents one store owner from
+    | modifying another owner's store.
+    |
+    */
+
+        $storeModel =
+            Store::query()
+            ->where(
+                'id',
+                $store
+            )
+            ->where(
+                'owner_id',
+                $request->user()->id
+            )
+            ->first();
+
+
+        if (!$storeModel) {
+
+            return response()->json([
+                'success' => false,
+
+                'message' =>
+                'Store not found or you do not own this store.',
+            ], 403);
+        }
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | VALIDATION
+    |--------------------------------------------------------------------------
+    */
+
+        $validated =
+            $request->validate([
+
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                ],
+
+                'description' => [
+                    'nullable',
+                    'string',
+                ],
+
+                'phone' => [
+                    'nullable',
+                    'string',
+                    'max:50',
+                ],
+
+                'address' => [
+                    'nullable',
+                    'string',
+                    'max:500',
+                ],
+
+                'latitude' => [
+                    'nullable',
+                    'numeric',
+                    'between:-90,90',
+                ],
+
+                'longitude' => [
+                    'nullable',
+                    'numeric',
+                    'between:-180,180',
+                ],
+
+                'is_active' => [
+                    'required',
+                    'boolean',
+                ],
+            ]);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | UPDATE
+    |--------------------------------------------------------------------------
+    */
+
+        $storeModel->update([
+            'name' =>
+            $validated['name'],
+
+            'description' =>
+            $validated['description'] ?? null,
+
+            'phone' =>
+            $validated['phone'] ?? null,
+
+            'address' =>
+            $validated['address'] ?? null,
+
+            'latitude' =>
+            $validated['latitude'] ?? null,
+
+            'longitude' =>
+            $validated['longitude'] ?? null,
+
+            'is_active' =>
+            $validated['is_active'],
+        ]);
+
+
+        /*
+    |--------------------------------------------------------------------------
+    | RESPONSE
+    |--------------------------------------------------------------------------
+    */
+
+        return response()->json([
+
+            'success' => true,
+
+            'message' =>
+            'Store settings updated successfully.',
+
+            'store' => [
+                'id' =>
+                $storeModel->id,
+
+                'name' =>
+                $storeModel->name,
+
+                'slug' =>
+                $storeModel->slug,
+
+                'business_type' =>
+                $storeModel->business_type,
+
+                'description' =>
+                $storeModel->description,
+
+                'phone' =>
+                $storeModel->phone,
+
+                'address' =>
+                $storeModel->address,
+
+                'latitude' =>
+                $storeModel->latitude,
+
+                'longitude' =>
+                $storeModel->longitude,
+
+                'logo' =>
+                $storeModel->logo,
+
+                'is_active' =>
+                (bool) $storeModel->is_active,
+            ],
+        ]);
+    }
 }
