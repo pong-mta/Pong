@@ -78,6 +78,11 @@ class GroceryCheckoutController extends Controller
                 'max:1000',
             ],
 
+            'payment_method' => [
+                'required',
+                'in:cod,gcash,maya,card',
+            ],
+
         ]);
 
 
@@ -561,6 +566,18 @@ class GroceryCheckoutController extends Controller
                     'fulfillment_type' =>
                     $validated['fulfillment_type'],
 
+                    'payment_method' =>
+                    $validated['payment_method'],
+
+                    'payment_status' =>
+                    'pending',
+
+                    'payment_reference' =>
+                    null,
+
+                    'paid_at' =>
+                    null,
+
                     'subtotal' =>
                     $subtotal,
 
@@ -760,6 +777,18 @@ class GroceryCheckoutController extends Controller
 
                 'fulfillment_type' =>
                 $order->fulfillment_type,
+
+                'payment_method' =>
+                $order->payment_method,
+
+                'payment_status' =>
+                $order->payment_status,
+
+                'payment_reference' =>
+                $order->payment_reference,
+
+                'paid_at' =>
+                $order->paid_at,
 
 
                 /*

@@ -151,6 +151,15 @@ Route::middleware('auth:sanctum')->group(function () {
             'updateStatus',
         ]
     );
+
+    Route::get(
+        '/grocery/store/orders/{order}',
+        [
+            GroceryStoreOrderController::class,
+            'show',
+        ]
+    );
+
     Route::get(
         '/grocery/store/orders',
         [

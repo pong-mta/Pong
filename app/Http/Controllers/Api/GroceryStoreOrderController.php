@@ -12,6 +12,285 @@ use Illuminate\Support\Facades\DB;
 
 class GroceryStoreOrderController extends Controller
 {
+
+    /**
+     * Get one order belonging to a store
+     * owned by the authenticated user.
+     */
+    public function show(
+        Request $request,
+        Order $order
+    ): JsonResponse {
+
+        $user = $request->user();
+
+
+        /*
+        |----------------------------------------------------------------------
+        | FIND STORE OWNED BY AUTHENTICATED USER
+        |----------------------------------------------------------------------
+        */
+
+        $store = Store::query()
+            ->where(
+                'id',
+                $order->store_id
+            )
+            ->where(
+                'owner_id',
+                $user->id
+            )
+            ->first();
+
+
+        /*
+        |----------------------------------------------------------------------
+        | STORE OWNER CHECK
+        |----------------------------------------------------------------------
+        */
+
+        if (!$store) {
+
+            return response()->json([
+                'success' => false,
+
+                'message' =>
+                'Order not found.',
+            ], 404);
+        }
+
+
+        /*
+        |----------------------------------------------------------------------
+        | LOAD ORDER RELATIONSHIPS
+        |----------------------------------------------------------------------
+        */
+
+        $order->load([
+            'store:id,name,slug,logo',
+
+            'user:id,name,phone',
+
+            'items',
+        ]);
+
+
+        /*
+        |----------------------------------------------------------------------
+        | RETURN ORDER
+        |----------------------------------------------------------------------
+        */
+
+        return response()->json([
+            'success' => true,
+
+            'order' => [
+
+                'id' =>
+                $order->id,
+
+                'order_number' =>
+                $order->order_number,
+
+                'status' =>
+                $order->status,
+
+                'fulfillment_type' =>
+                $order->fulfillment_type,
+
+
+                /*
+                |--------------------------------------------------------------
+                | CUSTOMER
+                |--------------------------------------------------------------
+                */
+
+                'customer' =>
+                $order->user
+                    ? [
+
+                        'id' =>
+                        $order
+                            ->user
+                            ->id,
+
+                        'name' =>
+                        $order
+                            ->user
+                            ->name,
+
+                        'phone' =>
+                        $order
+                            ->user
+                            ->phone,
+
+                    ]
+                    : null,
+
+
+                /*
+                |--------------------------------------------------------------
+                | STORE
+                |--------------------------------------------------------------
+                */
+
+                'store' =>
+                $order->store
+                    ? [
+
+                        'id' =>
+                        $order
+                            ->store
+                            ->id,
+
+                        'name' =>
+                        $order
+                            ->store
+                            ->name,
+
+                        'slug' =>
+                        $order
+                            ->store
+                            ->slug,
+
+                        'logo' =>
+                        $order
+                            ->store
+                            ->logo,
+
+                    ]
+                    : null,
+
+
+                /*
+                |--------------------------------------------------------------
+                | ITEMS
+                |--------------------------------------------------------------
+                */
+
+                'items' =>
+                $order
+                    ->items
+                    ->map(
+                        function ($item) {
+
+                            return [
+
+                                'id' =>
+                                $item->id,
+
+                                'product_variant_id' =>
+                                $item
+                                    ->product_variant_id,
+
+                                'product_name' =>
+                                $item
+                                    ->product_name,
+
+                                'variant_name' =>
+                                $item
+                                    ->variant_name,
+
+                                'sku' =>
+                                $item->sku,
+
+                                'quantity' =>
+                                $item
+                                    ->quantity,
+
+                                'unit_price' =>
+                                number_format(
+                                    (float)
+                                    $item
+                                        ->unit_price,
+                                    2,
+                                    '.',
+                                    ''
+                                ),
+
+                                'subtotal' =>
+                                number_format(
+                                    (float)
+                                    $item
+                                        ->subtotal,
+                                    2,
+                                    '.',
+                                    ''
+                                ),
+
+                            ];
+                        }
+                    )
+                    ->values(),
+
+
+                /*
+                |--------------------------------------------------------------
+                | TOTALS
+                |--------------------------------------------------------------
+                */
+
+                'subtotal' =>
+                number_format(
+                    (float)
+                    $order->subtotal,
+                    2,
+                    '.',
+                    ''
+                ),
+
+                'delivery_fee' =>
+                number_format(
+                    (float)
+                    $order->delivery_fee,
+                    2,
+                    '.',
+                    ''
+                ),
+
+                'total' =>
+                number_format(
+                    (float)
+                    $order->total,
+                    2,
+                    '.',
+                    ''
+                ),
+
+
+                /*
+                |--------------------------------------------------------------
+                | DELIVERY
+                |--------------------------------------------------------------
+                */
+
+                'delivery_address' =>
+                $order
+                    ->delivery_address,
+
+                'delivery_latitude' =>
+                $order
+                    ->delivery_latitude,
+
+                'delivery_longitude' =>
+                $order
+                    ->delivery_longitude,
+
+
+                /*
+                |--------------------------------------------------------------
+                | OTHER
+                |--------------------------------------------------------------
+                */
+
+                'notes' =>
+                $order->notes,
+
+                'created_at' =>
+                $order->created_at,
+            ],
+        ]);
+    }
     /**
      * Get orders belonging to stores owned by
      * the authenticated user.
