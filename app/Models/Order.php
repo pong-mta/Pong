@@ -24,6 +24,11 @@ class Order extends Model
         'delivery_latitude',
         'delivery_longitude',
         'notes',
+
+        'payment_method',
+        'payment_status',
+        'payment_reference',
+        'paid_at',
     ];
 
     protected $casts = [
@@ -32,6 +37,7 @@ class Order extends Model
         'total' => 'decimal:2',
         'delivery_latitude' => 'decimal:7',
         'delivery_longitude' => 'decimal:7',
+        'paid_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
