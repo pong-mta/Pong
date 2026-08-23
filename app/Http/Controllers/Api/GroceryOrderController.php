@@ -10,77 +10,40 @@ use Illuminate\Http\Request;
 class GroceryOrderController extends Controller
 {
     /**
-     * Get orders for a specific store owned by
-     * the authenticated store owner.
+     * Get orders belonging to the
+     * authenticated customer.
+     *
+     * IMPORTANT:
+     * This endpoint is for CUSTOMER "My Orders".
+     *
+     * It must NOT require store_id.
      */
     public function index(
         Request $request
     ): JsonResponse {
 
         /*
-    |--------------------------------------------------------------------------
-    | VALIDATE STORE ID
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | AUTHENTICATED USER
+        |--------------------------------------------------------------------------
+        */
 
-        $request->validate([
-            'store_id' => [
-                'required',
-                'integer',
-            ],
-        ]);
+        $user = $request->user();
 
 
         /*
-    |--------------------------------------------------------------------------
-    | FIND STORE
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    | Make sure the authenticated user actually owns
-    | the requested store.
-    |
-    */
-
-        $store = \App\Models\Store::query()
-            ->where(
-                'id',
-                $request->integer('store_id')
-            )
-            ->where(
-                'owner_id',
-                $request->user()->id
-            )
-            ->first();
-
-
-        /*
-    |--------------------------------------------------------------------------
-    | STORE NOT FOUND / NOT OWNER
-    |--------------------------------------------------------------------------
-    */
-
-        if (!$store) {
-
-            return response()->json([
-                'success' => false,
-
-                'message' =>
-                'Store not found or you do not own this store.',
-            ], 403);
-        }
-
-
-        /*
-    |--------------------------------------------------------------------------
-    | GET ORDERS FOR THIS STORE ONLY
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | GET CUSTOMER ORDERS
+        |--------------------------------------------------------------------------
+        |
+        | Only return orders created by this customer.
+        |
+        */
 
         $orders = Order::query()
             ->where(
-                'store_id',
-                $store->id
+                'user_id',
+                $user->id
             )
             ->with([
                 'store:id,name,slug,logo',
@@ -91,275 +54,209 @@ class GroceryOrderController extends Controller
 
 
         /*
-    |--------------------------------------------------------------------------
-    | RESPONSE
-    |--------------------------------------------------------------------------
-    */
+        |--------------------------------------------------------------------------
+        | RESPONSE
+        |--------------------------------------------------------------------------
+        */
 
         return response()->json([
 
             'success' => true,
 
+            'orders' => $orders
+                ->map(
+                    function ($order) {
 
-            /*
-        |--------------------------------------------------------------------------
-        | STORE
-        |--------------------------------------------------------------------------
-        */
+                        return [
 
-            'store' => [
+                            /*
+                            |--------------------------------------------------------------------------
+                            | ORDER
+                            |--------------------------------------------------------------------------
+                            */
 
-                'id' =>
-                $store->id,
+                            'id' =>
+                            $order->id,
 
-                'name' =>
-                $store->name,
+                            'order_number' =>
+                            $order->order_number,
 
-                'slug' =>
-                $store->slug,
+                            'status' =>
+                            $order->status,
 
-                'logo' =>
-                $store->logo,
-            ],
-
-
-            /*
-        |--------------------------------------------------------------------------
-        | ORDERS
-        |--------------------------------------------------------------------------
-        */
-
-            'orders' =>
-
-            $orders->map(
-
-                function ($order) {
-
-                    return [
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | ORDER
-                        |--------------------------------------------------------------------------
-                        */
-
-                        'id' =>
-                        $order->id,
-
-                        'order_number' =>
-                        $order->order_number,
-
-                        'status' =>
-                        $order->status,
-
-                        'fulfillment_type' =>
-                        $order->fulfillment_type,
+                            'fulfillment_type' =>
+                            $order->fulfillment_type,
 
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | CUSTOMER
-                        |--------------------------------------------------------------------------
-                        |
-                        | If your Order model has a `customer`
-                        | relationship, this will work.
-                        |
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | STORE
+                            |--------------------------------------------------------------------------
+                            */
 
-                        'customer' =>
-                        $order->customer
-                            ? [
+                            'store' =>
+                            $order->store
+                                ? [
 
-                                'id' =>
-                                $order
-                                    ->customer
-                                    ->id,
+                                    'id' =>
+                                    $order
+                                        ->store
+                                        ->id,
 
-                                'name' =>
-                                $order
-                                    ->customer
-                                    ->name,
+                                    'name' =>
+                                    $order
+                                        ->store
+                                        ->name,
 
-                                'phone' =>
-                                $order
-                                    ->customer
-                                    ->phone,
+                                    'slug' =>
+                                    $order
+                                        ->store
+                                        ->slug,
 
-                            ]
-                            : null,
+                                    'logo' =>
+                                    $order
+                                        ->store
+                                        ->logo,
 
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | STORE
-                        |--------------------------------------------------------------------------
-                        */
-
-                        'store' =>
-                        $order->store
-                            ? [
-
-                                'id' =>
-                                $order
-                                    ->store
-                                    ->id,
-
-                                'name' =>
-                                $order
-                                    ->store
-                                    ->name,
-
-                                'slug' =>
-                                $order
-                                    ->store
-                                    ->slug,
-
-                                'logo' =>
-                                $order
-                                    ->store
-                                    ->logo,
-
-                            ]
-                            : null,
+                                ]
+                                : null,
 
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | ITEMS
-                        |--------------------------------------------------------------------------
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | ITEMS
+                            |--------------------------------------------------------------------------
+                            */
 
-                        'items' =>
+                            'items' =>
+                            $order
+                                ->items
+                                ->map(
+                                    function ($item) {
 
-                        $order
-                            ->items
-                            ->map(
+                                        return [
 
-                                function ($item) {
+                                            'id' =>
+                                            $item->id,
 
-                                    return [
-
-                                        'id' =>
-                                        $item->id,
-
-                                        'product_variant_id' =>
-                                        $item
-                                            ->product_variant_id,
-
-                                        'product_name' =>
-                                        $item
-                                            ->product_name,
-
-                                        'variant_name' =>
-                                        $item
-                                            ->variant_name,
-
-                                        'sku' =>
-                                        $item->sku,
-
-                                        'quantity' =>
-                                        $item
-                                            ->quantity,
-
-                                        'unit_price' =>
-                                        number_format(
-                                            (float)
+                                            'product_variant_id' =>
                                             $item
-                                                ->unit_price,
-                                            2,
-                                            '.',
-                                            ''
-                                        ),
+                                                ->product_variant_id,
 
-                                        'subtotal' =>
-                                        number_format(
-                                            (float)
+                                            'product_name' =>
                                             $item
-                                                ->subtotal,
-                                            2,
-                                            '.',
-                                            ''
-                                        ),
-                                    ];
-                                }
-                            )
-                            ->values(),
+                                                ->product_name,
+
+                                            'variant_name' =>
+                                            $item
+                                                ->variant_name,
+
+                                            'sku' =>
+                                            $item->sku,
+
+                                            'quantity' =>
+                                            $item
+                                                ->quantity,
+
+                                            'unit_price' =>
+                                            number_format(
+                                                (float)
+                                                $item
+                                                    ->unit_price,
+                                                2,
+                                                '.',
+                                                ''
+                                            ),
+
+                                            'subtotal' =>
+                                            number_format(
+                                                (float)
+                                                $item
+                                                    ->subtotal,
+                                                2,
+                                                '.',
+                                                ''
+                                            ),
+                                        ];
+                                    }
+                                )
+                                ->values(),
 
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | TOTALS
-                        |--------------------------------------------------------------------------
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | TOTALS
+                            |--------------------------------------------------------------------------
+                            */
 
-                        'subtotal' =>
-                        number_format(
-                            (float)
-                            $order->subtotal,
-                            2,
-                            '.',
-                            ''
-                        ),
+                            'subtotal' =>
+                            number_format(
+                                (float)
+                                $order->subtotal,
+                                2,
+                                '.',
+                                ''
+                            ),
 
-                        'delivery_fee' =>
-                        number_format(
-                            (float)
-                            $order->delivery_fee,
-                            2,
-                            '.',
-                            ''
-                        ),
+                            'delivery_fee' =>
+                            number_format(
+                                (float)
+                                $order->delivery_fee,
+                                2,
+                                '.',
+                                ''
+                            ),
 
-                        'total' =>
-                        number_format(
-                            (float)
-                            $order->total,
-                            2,
-                            '.',
-                            ''
-                        ),
-
-
-                        /*
-                        |--------------------------------------------------------------------------
-                        | DELIVERY
-                        |--------------------------------------------------------------------------
-                        */
-
-                        'delivery_address' =>
-                        $order
-                            ->delivery_address,
-
-                        'delivery_latitude' =>
-                        $order
-                            ->delivery_latitude,
-
-                        'delivery_longitude' =>
-                        $order
-                            ->delivery_longitude,
+                            'total' =>
+                            number_format(
+                                (float)
+                                $order->total,
+                                2,
+                                '.',
+                                ''
+                            ),
 
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | NOTES
-                        |--------------------------------------------------------------------------
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | DELIVERY
+                            |--------------------------------------------------------------------------
+                            */
 
-                        'notes' =>
-                        $order->notes,
+                            'delivery_address' =>
+                            $order
+                                ->delivery_address,
+
+                            'delivery_latitude' =>
+                            $order
+                                ->delivery_latitude,
+
+                            'delivery_longitude' =>
+                            $order
+                                ->delivery_longitude,
 
 
-                        /*
-                        |--------------------------------------------------------------------------
-                        | DATE
-                        |--------------------------------------------------------------------------
-                        */
+                            /*
+                            |--------------------------------------------------------------------------
+                            | NOTES
+                            |--------------------------------------------------------------------------
+                            */
 
-                        'created_at' =>
-                        $order->created_at,
-                    ];
-                }
-            )
+                            'notes' =>
+                            $order->notes,
+
+
+                            /*
+                            |--------------------------------------------------------------------------
+                            | DATE
+                            |--------------------------------------------------------------------------
+                            */
+
+                            'created_at' =>
+                            $order->created_at,
+                        ];
+                    }
+                )
                 ->values(),
         ]);
     }
@@ -367,7 +264,7 @@ class GroceryOrderController extends Controller
 
     /**
      * Get one order belonging to the
-     * authenticated user.
+     * authenticated customer.
      */
     public function show(
         Request $request,
@@ -375,23 +272,33 @@ class GroceryOrderController extends Controller
     ): JsonResponse {
 
         /*
-         * IMPORTANT:
-         *
-         * Never allow a customer to view
-         * another customer's order.
-         */
+        |--------------------------------------------------------------------------
+        | CUSTOMER OWNERSHIP CHECK
+        |--------------------------------------------------------------------------
+        |
+        | A customer can only view their own order.
+        |
+        */
+
         if (
-            (int) $order->user_id
-            !==
+            (int) $order->user_id !==
             (int) $request->user()->id
         ) {
+
             return response()->json([
                 'success' => false,
+
                 'message' =>
                 'Order not found.',
             ], 404);
         }
 
+
+        /*
+        |--------------------------------------------------------------------------
+        | LOAD RELATIONSHIPS
+        |--------------------------------------------------------------------------
+        */
 
         $order->load([
             'store:id,name,slug,logo',
@@ -399,10 +306,24 @@ class GroceryOrderController extends Controller
         ]);
 
 
+        /*
+        |--------------------------------------------------------------------------
+        | RESPONSE
+        |--------------------------------------------------------------------------
+        */
+
         return response()->json([
+
             'success' => true,
 
             'order' => [
+
+                /*
+                |--------------------------------------------------------------------------
+                | ORDER
+                |--------------------------------------------------------------------------
+                */
+
                 'id' =>
                 $order->id,
 
@@ -415,9 +336,17 @@ class GroceryOrderController extends Controller
                 'fulfillment_type' =>
                 $order->fulfillment_type,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | STORE
+                |--------------------------------------------------------------------------
+                */
+
                 'store' =>
                 $order->store
                     ? [
+
                         'id' =>
                         $order
                             ->store
@@ -437,15 +366,25 @@ class GroceryOrderController extends Controller
                         $order
                             ->store
                             ->logo,
+
                     ]
                     : null,
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | ITEMS
+                |--------------------------------------------------------------------------
+                */
 
                 'items' =>
                 $order
                     ->items
                     ->map(
                         function ($item) {
+
                             return [
+
                                 'id' =>
                                 $item->id,
 
@@ -492,6 +431,13 @@ class GroceryOrderController extends Controller
                     )
                     ->values(),
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | TOTALS
+                |--------------------------------------------------------------------------
+                */
+
                 'subtotal' =>
                 number_format(
                     (float)
@@ -519,6 +465,13 @@ class GroceryOrderController extends Controller
                     ''
                 ),
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | DELIVERY
+                |--------------------------------------------------------------------------
+                */
+
                 'delivery_address' =>
                 $order
                     ->delivery_address,
@@ -531,8 +484,22 @@ class GroceryOrderController extends Controller
                 $order
                     ->delivery_longitude,
 
+
+                /*
+                |--------------------------------------------------------------------------
+                | NOTES
+                |--------------------------------------------------------------------------
+                */
+
                 'notes' =>
                 $order->notes,
+
+
+                /*
+                |--------------------------------------------------------------------------
+                | DATE
+                |--------------------------------------------------------------------------
+                */
 
                 'created_at' =>
                 $order->created_at,
