@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\Auth\AdminAuthenticatedSessionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\Admin\AdminDashboardController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -27,9 +28,8 @@ Route::middleware('guest:admin')->prefix('admin')->name('admin.')->group(functio
 });
 
 Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('admin/dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', AdminDashboardController::class)
+        ->name('dashboard');
 
     Route::post('/logout', [
         AdminAuthenticatedSessionController::class,
