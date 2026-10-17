@@ -1,4 +1,3 @@
-
 <?php
 
 namespace App\Models;
@@ -10,8 +9,6 @@ use Illuminate\Notifications\Notifiable;
 class Admin extends Authenticatable
 {
     use HasFactory, Notifiable;
-
-    protected $guard = 'admin';
 
     protected $fillable = [
         'name',
