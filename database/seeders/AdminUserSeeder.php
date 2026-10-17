@@ -2,63 +2,39 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+
+use App\Models\Admin;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class AdminUserSeeder extends Seeder
 {
     /**
-     * Seed the admin account.
+     * Seed the PONG web administrator.
      */
     public function run(): void
     {
-        /*
-        |--------------------------------------------------------------------------
-        | ADMIN ACCOUNT
-        |--------------------------------------------------------------------------
-        */
+        $name = config('admin.initial_admin.name');
+        $email = config('admin.initial_admin.email');
+        $password = config('admin.initial_admin.password');
 
-        $user = User::updateOrCreate(
-            [
-                'phone' => '09156014662',
-            ],
-            [
-                'name' => 'PONG ADMIN',
-
-                'phone_verified' => true,
-
-                'password' =>
-                Hash::make('jokerpong006'),
-            ]
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | GET ADMIN ROLE
-        |--------------------------------------------------------------------------
-        */
-
-        $adminRoleId =
-            DB::table('roles')
-            ->where('name', 'admin')
-            ->value('id');
-
-        if (!$adminRoleId) {
-            throw new \RuntimeException(
-                'Admin role does not exist. Run RoleSeeder first.'
+        if (blank($email) || blank($password)) {
+            throw new RuntimeException(
+                'Set PONG_ADMIN_EMAIL and PONG_ADMIN_PASSWORD in .env.'
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | ASSIGN ADMIN ROLE
-        |--------------------------------------------------------------------------
-        */
+        Admin::firstOrCreate(
+            ['email' => $email],
+            [
+                'name' => $name ?: 'PONG Administrator',
+                'password' => $password,
+                'is_active' => true,
+            ]
+        );
 
-        $user->roles()->syncWithoutDetaching([
-            $adminRoleId,
-        ]);
+        $this->command?->info(
+            "PONG web administrator verified: {$email}"
+        );
     }
 }
