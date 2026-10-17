@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\Auth\AdminAuthenticatedSessionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\StoreOwnerApplicationController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -35,6 +36,23 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
         AdminAuthenticatedSessionController::class,
         'destroy',
     ])->name('logout');
+
+
+
+    Route::get('/applications', [
+        StoreOwnerApplicationController::class,
+        'index',
+    ])->name('applications.index');
+
+    Route::post('/applications/{application}/approve', [
+        StoreOwnerApplicationController::class,
+        'approve',
+    ])->name('applications.approve');
+
+    Route::post('/applications/{application}/reject', [
+        StoreOwnerApplicationController::class,
+        'reject',
+    ])->name('applications.reject');
 });
 
 /*
