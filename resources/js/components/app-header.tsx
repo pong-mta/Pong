@@ -11,7 +11,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import { Bell, BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppLogoIcon from './app-logo-icon';
 
@@ -46,6 +46,9 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
     const page = usePage<SharedData>();
     const { auth } = page.props;
     const getInitials = useInitials();
+    const unreadNotificationsCount = Number(
+        (page.props as SharedData & { adminUnreadNotificationsCount?: number }).adminUnreadNotificationsCount ?? 0,
+    );
     return (
         <>
             <div className="border-sidebar-border/80 border-b">
@@ -152,6 +155,38 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                 ))}
                             </div>
                         </div>
+                        {/* Admin notifications */}
+                        <TooltipProvider delayDuration={0}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        asChild
+                                        variant="ghost"
+                                        size="icon"
+                                        className="relative size-9"
+                                    >
+                                        <Link
+                                            href="/admin/notifications"
+                                            aria-label={
+                                                unreadNotificationsCount > 0
+                                                    ? `Notifications, ${unreadNotificationsCount} unread`
+                                                    : 'Notifications'
+                                            }
+                                        >
+                                            <Bell className="size-5 opacity-80" />
+                                            {unreadNotificationsCount > 0 && (
+                                                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white">
+                                                    {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Notifications</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" className="size-10 rounded-full p-1">
