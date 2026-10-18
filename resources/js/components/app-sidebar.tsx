@@ -1,3 +1,4 @@
+
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -17,6 +18,7 @@ import {
     ClipboardCheck,
     Folder,
     LayoutGrid,
+    MapPinned,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -38,6 +40,11 @@ const adminNavItems: NavItem[] = [
         title: 'Applications',
         url: '/admin/applications',
         icon: ClipboardCheck,
+    },
+    {
+        title: 'User Locations',
+        url: '/admin/user-locations',
+        icon: MapPinned,
     },
 ];
 
@@ -79,7 +86,10 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+                <NavFooter
+                    items={footerNavItems}
+                    className="mt-auto"
+                />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

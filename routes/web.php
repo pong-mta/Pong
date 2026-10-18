@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\StoreOwnerApplicationController;
+use App\Http\Controllers\Admin\UserLocationController as AdminUserLocationController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -53,6 +54,12 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
         StoreOwnerApplicationController::class,
         'reject',
     ])->name('applications.reject');
+
+
+    Route::get('/user-locations', [
+        AdminUserLocationController::class,
+        'index',
+    ])->name('user-locations.index');
 });
 
 /*
