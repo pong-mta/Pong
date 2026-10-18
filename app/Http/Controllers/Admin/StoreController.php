@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
+use App\Services\FCMService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class StoreController extends Controller
 {
@@ -29,9 +32,7 @@ class StoreController extends Controller
         $status = $validated['status'] ?? 'all';
 
         $stores = Store::query()
-            ->with([
-                'owner:id,name,phone',
-            ])
+            ->with(['owner:id,name,phone'])
             ->withCount([])
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($subQuery) use ($search) {
@@ -87,15 +88,77 @@ class StoreController extends Controller
     }
 
     /**
-     * Activate or deactivate a store without deleting its data.
+     * Activate or deactivate a store.
+     *
+     * Notify the owner only when the store changes
+     * from active to inactive.
      */
-    public function toggleStatus(Store $store): RedirectResponse
-    {
+    public function toggleStatus(
+        Store $store,
+        FCMService $fcmService
+    ): RedirectResponse {
+        $wasActive = (bool) $store->is_active;
+
         $store->update([
-            'is_active' => ! $store->is_active,
+            'is_active' => ! $wasActive,
         ]);
 
-        $status = $store->is_active ? 'activated' : 'deactivated';
+        $store->refresh();
+
+        $status = $store->is_active
+            ? 'activated'
+            : 'deactivated';
+
+        /*
+        |--------------------------------------------------------------------------
+        | NOTIFY OWNER WHEN STORE IS DEACTIVATED
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $wasActive &&
+            ! $store->is_active &&
+            $store->owner_id
+        ) {
+            try {
+                $sent = $fcmService->sendToUser(
+                    (int) $store->owner_id,
+                    'Store Deactivated',
+                    "Your store \"{$store->name}\" has been deactivated by PONG administration. It is no longer visible to customers and cannot receive new orders while inactive.",
+                    [
+                        'type' => 'store_deactivated',
+                        'store_id' => (string) $store->id,
+                        'store_name' => (string) $store->name,
+                    ]
+                );
+
+                Log::info('PONG STORE DEACTIVATION NOTIFICATION', [
+                    'store_id' => $store->id,
+                    'owner_id' => $store->owner_id,
+                    'devices_notified' => $sent,
+                ]);
+
+                if ($sent === 0) {
+                    Log::warning(
+                        'No device received the store deactivation notification.',
+                        [
+                            'store_id' => $store->id,
+                            'owner_id' => $store->owner_id,
+                        ]
+                    );
+                }
+            } catch (Throwable $e) {
+                // The store remains deactivated if notification delivery fails.
+                Log::error(
+                    'PONG STORE DEACTIVATION NOTIFICATION FAILED',
+                    [
+                        'store_id' => $store->id,
+                        'owner_id' => $store->owner_id,
+                        'error' => $e->getMessage(),
+                    ]
+                );
+            }
+        }
 
         return back()->with(
             'success',
