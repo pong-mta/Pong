@@ -1,4 +1,3 @@
-
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -19,6 +18,7 @@ import {
     Folder,
     LayoutGrid,
     MapPinned,
+    MessageSquareText,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -45,6 +45,11 @@ const adminNavItems: NavItem[] = [
         title: 'User Locations',
         url: '/admin/user-locations',
         icon: MapPinned,
+    },
+    {
+        title: 'SMS Messages',
+        url: '/admin/sms-messages',
+        icon: MessageSquareText,
     },
 ];
 

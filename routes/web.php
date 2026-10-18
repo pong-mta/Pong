@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\StoreOwnerApplicationController;
 use App\Http\Controllers\Admin\UserLocationController as AdminUserLocationController;
+use App\Http\Controllers\Admin\SmsMessageController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -60,6 +61,16 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
         AdminUserLocationController::class,
         'index',
     ])->name('user-locations.index');
+
+    Route::get('/sms-messages', [
+        SmsMessageController::class,
+        'index',
+    ])->name('sms-messages.index');
+
+    Route::post('/sms-messages', [
+        SmsMessageController::class,
+        'store',
+    ])->middleware('throttle:10,1')->name('sms-messages.store');
 });
 
 /*
