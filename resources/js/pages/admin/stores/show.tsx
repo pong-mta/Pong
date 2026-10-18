@@ -14,6 +14,7 @@ import {
     Power,
     Search,
     Package,
+    Folder,
 } from 'lucide-react';
 
 type StoreOwner = {
@@ -35,7 +36,13 @@ type ProductVariant = {
 
 type StoreCategory = {
     id: number;
+    store_id?: number;
     name: string;
+    slug?: string | null;
+    description?: string | null;
+    image?: string | null;
+    is_active?: boolean | number | string | null;
+    sort_order?: number | null;
 };
 
 type StoreProduct = {
@@ -73,6 +80,7 @@ type StoreRecord = {
     created_at: string;
     updated_at?: string;
     owner: StoreOwner | null;
+    categories?: StoreCategory[];
     products?: StoreProduct[];
 };
 
@@ -80,11 +88,11 @@ type Props = {
     store: StoreRecord;
 };
 
-function isEnabled(value: boolean | number | null | undefined) {
-    return value === true || value === 1;
+function isEnabled(value: boolean | number | string | null | undefined): boolean {
+    return value === true || value === 1 || value === '1';
 }
 
-function formatPrice(value: number | string | null | undefined) {
+function formatPrice(value: number | string | null | undefined): string {
     if (value === null || value === undefined || value === '') return '—';
     const amount = Number(value);
     if (Number.isNaN(amount)) return String(value);
@@ -94,7 +102,7 @@ function formatPrice(value: number | string | null | undefined) {
     }).format(amount);
 }
 
-function formatDate(value?: string | null) {
+function formatDate(value?: string | null): string {
     if (!value) return 'Not available';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
@@ -105,7 +113,7 @@ function formatDate(value?: string | null) {
     }).format(date);
 }
 
-function imageUrl(value?: string | null) {
+function imageUrl(value?: string | null): string | null {
     if (!value) return null;
     if (/^https?:\/\//i.test(value)) return value;
     if (value.startsWith('/')) return value;
@@ -137,16 +145,19 @@ function Detail({
 export default function Show({ store }: Props) {
     const active = isEnabled(store.is_active);
     const products = store.products ?? [];
+    const storeCategories = store.categories ?? [];
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
 
+    // Include categories even if they currently have no products.
     const categories = useMemo(() => {
-        const names = products
-            .map((product) => product.category?.name)
-            .filter((name): name is string => Boolean(name));
+        const names = [
+            ...storeCategories.map((category) => category.name),
+            ...products.map((product) => product.category?.name ?? ''),
+        ].filter((name): name is string => Boolean(name));
         return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
-    }, [products]);
+    }, [storeCategories, products]);
 
     const filteredProducts = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -191,7 +202,7 @@ export default function Show({ store }: Props) {
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight">Store Details</h1>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Review the store profile and everything this store is selling.
+                                Review the store profile, categories, and products for sale.
                             </p>
                         </div>
                         <button
@@ -235,7 +246,9 @@ export default function Show({ store }: Props) {
                                     {active ? 'Active' : 'Inactive'}
                                 </span>
                             </div>
-                            <p className="mt-2 text-sm text-muted-foreground">Store ID: {store.id} · Slug: {store.slug || 'Not set'}</p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                                Store ID: {store.id} · Slug: {store.slug || 'Not set'}
+                            </p>
                             <p className="mt-3 text-sm">{store.description || 'No store description has been provided.'}</p>
                         </div>
                     </div>
@@ -268,11 +281,62 @@ export default function Show({ store }: Props) {
                                 <Detail label="Owner account created" value={formatDate(store.owner.created_at)} icon={<CalendarDays className="h-4 w-4" />} />
                             </div>
                         ) : (
-                            <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">The associated owner account could not be found.</p>
+                            <p className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">
+                                The associated owner account could not be found.
+                            </p>
                         )}
                     </section>
                 </div>
 
+                {/* Store categories: rendered independently of products. */}
+                <section className="rounded-xl border bg-card">
+                    <div className="flex flex-col gap-2 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2">
+                            <Folder className="h-5 w-5 text-muted-foreground" />
+                            <h2 className="text-lg font-semibold">Store Categories</h2>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                            {storeCategories.length} categor{storeCategories.length === 1 ? 'y' : 'ies'} registered
+                        </p>
+                    </div>
+                    {storeCategories.length === 0 ? (
+                        <div className="px-5 py-10 text-center">
+                            <Folder className="mx-auto h-9 w-9 text-muted-foreground/60" />
+                            <h3 className="mt-3 font-semibold">No categories found</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                No categories were returned for this store. Confirm that the store has categories in the database and that the controller loads the categories relationship.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
+                            {storeCategories.map((category) => (
+                                <div key={category.id} className="flex items-start gap-3 rounded-lg border p-4">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                        <Folder className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-medium">{category.name}</p>
+                                        {category.description && (
+                                            <p className="mt-1 text-xs text-muted-foreground">{category.description}</p>
+                                        )}
+                                        <p className="mt-1 text-xs text-muted-foreground">Category ID: {category.id}</p>
+                                    </div>
+                                    {category.is_active !== undefined && (
+                                        <span className={`rounded-full px-2 py-1 text-xs ${
+                                            isEnabled(category.is_active)
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-muted text-muted-foreground'
+                                        }`}>
+                                            {isEnabled(category.is_active) ? 'Active' : 'Inactive'}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+
+                {/* Products */}
                 <section className="rounded-xl border bg-card">
                     <div className="flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -360,8 +424,12 @@ export default function Show({ store }: Props) {
                                                         )}
                                                         <div className="min-w-0">
                                                             <p className="font-semibold">{product.name}</p>
-                                                            <p className="mt-1 text-xs text-muted-foreground">ID: {product.id}{product.sku ? ` · SKU: ${product.sku}` : ''}</p>
-                                                            {product.description && <p className="mt-1 max-w-sm text-xs text-muted-foreground">{product.description}</p>}
+                                                            <p className="mt-1 text-xs text-muted-foreground">
+                                                                ID: {product.id}{product.sku ? ` · SKU: ${product.sku}` : ''}
+                                                            </p>
+                                                            {product.description && (
+                                                                <p className="mt-1 max-w-sm text-xs text-muted-foreground">{product.description}</p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>
