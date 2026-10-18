@@ -80,7 +80,12 @@ class StoreController extends Controller
 
     public function show(Store $store): Response
     {
-        $store->load(['owner:id,name,phone,created_at']);
+        $store->load([
+            'owner:id,name,phone,created_at',
+            'categories',
+            'products.category',
+            'products.variants',
+        ]);
 
         return Inertia::render('admin/stores/show', [
             'store' => $store,
