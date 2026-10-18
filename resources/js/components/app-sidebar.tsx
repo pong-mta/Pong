@@ -152,9 +152,10 @@ export function AppSidebar() {
         return () => window.clearInterval(interval);
     }, [isAdminArea]);
 
+    
     const markAsRead = async (notification: AdminNotification) => {
-        if (!notification.read_at) {
-            try {
+        try {
+            if (!notification.read_at) {
                 const csrfToken = document
                     .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
                     ?.content;
@@ -175,18 +176,30 @@ export function AppSidebar() {
                 );
 
                 if (!response.ok) {
-                    throw new Error('Unable to mark notification as read.');
+                    const message = await response.text();
+                    console.error('Mark as read failed:', response.status, message);
+                    return;
                 }
 
-                await loadNotifications();
-            } catch (error) {
-                console.error('Failed to mark notification as read:', error);
-            }
-        }
+                const result = await response.json();
+                setUnreadCount(result.unread_count);
 
-        setNotificationsOpen(false);
-        router.visit(notification.data.url || '/admin/applications');
+                setNotifications((current) =>
+                    current.map((item) =>
+                        item.id === notification.id
+                            ? { ...item, read_at: new Date().toISOString() }
+                            : item,
+                    ),
+                );
+            }
+
+            setNotificationsOpen(false);
+            router.visit(notification.data.url || '/admin/applications');
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
     };
+
 
     const markAllAsRead = async () => {
         try {
