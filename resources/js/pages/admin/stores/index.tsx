@@ -240,6 +240,7 @@ export default function Index({
                                 ) : (
                                     stores.data.map((store) => {
                                         const active = isActive(store);
+                                        const isDeleted = status === 'deleted';
                                         const logo = getLogoUrl(store.logo);
                                         return (
                                             <tr
