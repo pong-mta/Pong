@@ -19,6 +19,7 @@ import {
     LayoutGrid,
     MapPinned,
     MessageSquareText,
+    BellRing,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -50,6 +51,11 @@ const adminNavItems: NavItem[] = [
         title: 'SMS Messages',
         url: '/admin/sms-messages',
         icon: MessageSquareText,
+    },
+    {
+        title: 'FCM Notifications',
+        url: '/admin/fcm-notifications',
+        icon: BellRing,
     },
 ];
 

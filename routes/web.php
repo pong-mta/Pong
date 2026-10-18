@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\StoreOwnerApplicationController;
 use App\Http\Controllers\Admin\UserLocationController as AdminUserLocationController;
 use App\Http\Controllers\Admin\SmsMessageController;
+use App\Http\Controllers\Admin\FcmNotificationController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -71,6 +72,16 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
         SmsMessageController::class,
         'store',
     ])->middleware('throttle:10,1')->name('sms-messages.store');
+
+    Route::get('/fcm-notifications', [
+        FcmNotificationController::class,
+        'index',
+    ])->name('fcm-notifications.index');
+
+    Route::post('/fcm-notifications', [
+        FcmNotificationController::class,
+        'store',
+    ])->middleware('throttle:10,1')->name('fcm-notifications.store');
 });
 
 /*
