@@ -90,8 +90,16 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
     Route::get('/stores/{store}', [StoreController::class, 'show'])
         ->name('stores.show');
 
-    Route::patch('/stores/{store}/toggle-status', [StoreController::class, 'toggleStatus'])
-        ->name('stores.toggle-status');
+    Route::patch(
+        '/stores/{store}/toggle-status',
+        [StoreController::class, 'toggleStatus']
+    )->name('stores.toggle-status');
+
+    Route::delete('/stores/{store}', [StoreController::class, 'destroy'])
+        ->name('stores.destroy');
+
+    Route::patch('/stores/{store}/restore', [StoreController::class, 'restore'])
+        ->name('stores.restore');
 });
 
 /*
