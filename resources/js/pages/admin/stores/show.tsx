@@ -29,9 +29,10 @@ type ProductVariant = {
     name?: string | null;
     title?: string | null;
     price?: number | string | null;
+    sale_price?: number | string | null;
     stock?: number | string | null;
     quantity?: number | string | null;
-    is_active?: boolean | number | null;
+    is_active?: boolean | number | string | null;
 };
 
 type StoreCategory = {
@@ -100,6 +101,36 @@ function formatPrice(value: number | string | null | undefined): string {
         style: 'currency',
         currency: 'PHP',
     }).format(amount);
+}
+
+function numericValue(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount : null;
+}
+
+/** Prefer variant prices when available; otherwise use the product's price. */
+function getProductDisplayPrice(product: StoreProduct): number | null {
+    const variantPrices = (product.variants ?? [])
+        .map((variant) => numericValue(variant.sale_price) ?? numericValue(variant.price))
+        .filter((price): price is number => price !== null);
+
+    if (variantPrices.length > 0) return Math.min(...variantPrices);
+    return numericValue(product.sale_price) ?? numericValue(product.price);
+}
+
+/** Sum per-variant stock when available, otherwise fall back to product stock. */
+function getProductDisplayStock(product: StoreProduct): number | null {
+    const variants = product.variants ?? [];
+    const variantStockValues = variants.map(
+        (variant) => numericValue(variant.stock) ?? numericValue(variant.quantity),
+    );
+
+    if (variantStockValues.some((stock) => stock !== null)) {
+        return variantStockValues.reduce((total, stock) => total + (stock ?? 0), 0);
+    }
+
+    return numericValue(product.stock) ?? numericValue(product.quantity);
 }
 
 function formatDate(value?: string | null): string {
@@ -408,7 +439,8 @@ export default function Show({ store }: Props) {
                                 <tbody className="divide-y">
                                     {filteredProducts.map((product) => {
                                         const photo = imageUrl(product.image_url || product.image);
-                                        const stock = product.stock ?? product.quantity;
+                                        const displayPrice = getProductDisplayPrice(product);
+                                        const displayStock = getProductDisplayStock(product);
                                         const variantCount = product.variants?.length ?? 0;
                                         const productActive = isEnabled(product.is_active);
                                         return (
@@ -435,12 +467,19 @@ export default function Show({ store }: Props) {
                                                 </td>
                                                 <td className="px-4 py-4">{product.category?.name || 'Uncategorized'}</td>
                                                 <td className="whitespace-nowrap px-4 py-4 font-medium">
-                                                    {formatPrice(product.sale_price ?? product.price)}
-                                                    {product.sale_price != null && product.price != null && Number(product.sale_price) < Number(product.price) && (
-                                                        <p className="mt-1 text-xs text-muted-foreground line-through">{formatPrice(product.price)}</p>
-                                                    )}
+                                                    {formatPrice(displayPrice)}
+                                                    {product.sale_price != null &&
+                                                        product.price != null &&
+                                                        Number(product.sale_price) < Number(product.price) &&
+                                                        (product.variants?.length ?? 0) === 0 && (
+                                                            <p className="mt-1 text-xs text-muted-foreground line-through">
+                                                                {formatPrice(product.price)}
+                                                            </p>
+                                                        )}
                                                 </td>
-                                                <td className="px-4 py-4">{stock ?? 'Not tracked'}</td>
+                                                <td className="px-4 py-4">
+                                                    {displayStock === null ? 'Not tracked' : displayStock}
+                                                </td>
                                                 <td className="px-4 py-4">
                                                     {variantCount ? (
                                                         <div className="space-y-1">
