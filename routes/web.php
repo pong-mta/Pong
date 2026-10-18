@@ -100,6 +100,21 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
 
     Route::patch('/stores/{store}/restore', [StoreController::class, 'restore'])
         ->name('stores.restore');
+
+    Route::get('/notifications', [
+        \App\Http\Controllers\Admin\AdminNotificationController::class,
+        'index',
+    ])->name('notifications.index');
+
+    Route::patch('/notifications/{notification}/read', [
+        \App\Http\Controllers\Admin\AdminNotificationController::class,
+        'markAsRead',
+    ])->name('notifications.read');
+
+    Route::patch('/notifications/read-all', [
+        \App\Http\Controllers\Admin\AdminNotificationController::class,
+        'markAllAsRead',
+    ])->name('notifications.read-all');
 });
 
 /*

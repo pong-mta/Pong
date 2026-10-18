@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\StoreOwnerApplication;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\Admin;
+use App\Notifications\NewStoreOwnerApplicationNotification;
+use Illuminate\Support\Facades\Log;
 
 class GroceryStoreOwnerApplicationController extends Controller
 {
@@ -238,6 +241,27 @@ class GroceryStoreOwnerApplicationController extends Controller
                 'status' =>
                 'pending',
             ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | NOTIFY ACTIVE ADMINS
+        |--------------------------------------------------------------------------
+        */
+
+        try {
+            Admin::query()
+                ->where('is_active', true)
+                ->each(function (Admin $admin) use ($application) {
+                    $admin->notify(
+                        new NewStoreOwnerApplicationNotification($application)
+                    );
+                });
+        } catch (\Throwable $e) {
+            Log::error('Failed to create store application admin notification.', [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
 
         /*
