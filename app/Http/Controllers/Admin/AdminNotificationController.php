@@ -1,3 +1,4 @@
+
 <?php
 
 namespace App\Http\Controllers\Admin;
@@ -5,31 +6,41 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Notifications\DatabaseNotification;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AdminNotificationController extends Controller
 {
     /**
-     * List notifications for the authenticated admin.
+     * Display the admin notifications index.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): Response|JsonResponse
     {
         $admin = $request->user('admin');
 
         $notifications = $admin->notifications()
             ->latest()
-            ->limit(20)
-            ->get()
-            ->map(fn($notification) => [
+            ->paginate(20)
+            ->through(fn($notification) => [
                 'id' => $notification->id,
                 'data' => $notification->data,
                 'read_at' => $notification->read_at,
                 'created_at' => $notification->created_at,
             ]);
 
-        return response()->json([
+        $unreadCount = $admin->unreadNotifications()->count();
+
+        // Preserve JSON responses for explicit API-style requests.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'notifications' => $notifications,
+                'unread_count' => $unreadCount,
+            ]);
+        }
+
+        return Inertia::render('admin/notifications/index', [
             'notifications' => $notifications,
-            'unread_count' => $admin->unreadNotifications()->count(),
+            'unreadCount' => $unreadCount,
         ]);
     }
 
