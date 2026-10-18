@@ -20,6 +20,7 @@ import {
     MapPinned,
     MessageSquareText,
     BellRing,
+    Store 
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -41,6 +42,11 @@ const adminNavItems: NavItem[] = [
         title: 'Applications',
         url: '/admin/applications',
         icon: ClipboardCheck,
+    },
+    { 
+        title: 'All Stores', 
+        url: '/admin/stores', 
+        icon: Store 
     },
     {
         title: 'User Locations',

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\StoreOwnerApplicationController;
 use App\Http\Controllers\Admin\UserLocationController as AdminUserLocationController;
 use App\Http\Controllers\Admin\SmsMessageController;
 use App\Http\Controllers\Admin\FcmNotificationController;
+use App\Http\Controllers\Admin\StoreController;
 
 Route::get('/', function () {
     return Inertia::render('welcome');
@@ -82,6 +83,15 @@ Route::middleware('auth:admin')->prefix('admin')->name('admin.')->group(function
         FcmNotificationController::class,
         'store',
     ])->middleware('throttle:10,1')->name('fcm-notifications.store');
+
+    Route::get('/stores', [StoreController::class, 'index'])
+        ->name('stores.index');
+
+    Route::get('/stores/{store}', [StoreController::class, 'show'])
+        ->name('stores.show');
+
+    Route::patch('/stores/{store}/toggle-status', [StoreController::class, 'toggleStatus'])
+        ->name('stores.toggle-status');
 });
 
 /*
