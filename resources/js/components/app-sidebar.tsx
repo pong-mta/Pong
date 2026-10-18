@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+
+import { useCallback, useEffect, useState } from 'react';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -99,6 +100,48 @@ const footerNavItems: NavItem[] = [
     },
 ];
 
+function getCookie(name: string): string | null {
+    const prefix = `${name}=`;
+    const cookie = document.cookie
+        .split('; ')
+        .find((item) => item.startsWith(prefix));
+
+    if (!cookie) return null;
+
+    const value = cookie.slice(prefix.length);
+
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+function getCsrfHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    // Prefer Laravel's XSRF cookie when available.
+    const xsrfToken = getCookie('XSRF-TOKEN');
+
+    if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+    } else {
+        // Fallback to the CSRF meta tag.
+        const csrfToken = document.querySelector<HTMLMetaElement>(
+            'meta[name="csrf-token"]',
+        )?.content;
+
+        if (csrfToken) {
+            headers['X-CSRF-TOKEN'] = csrfToken;
+        }
+    }
+
+    return headers;
+}
+
 export function AppSidebar() {
     const { url } = usePage();
     const isAdminArea = url.startsWith('/admin');
@@ -109,12 +152,16 @@ export function AppSidebar() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [loadingNotifications, setLoadingNotifications] = useState(false);
+    const [notificationError, setNotificationError] = useState<string | null>(
+        null,
+    );
 
-    const loadNotifications = async () => {
+    const loadNotifications = useCallback(async () => {
         if (!isAdminArea) return;
 
         try {
             setLoadingNotifications(true);
+            setNotificationError(null);
 
             const response = await fetch('/admin/notifications', {
                 method: 'GET',
@@ -126,7 +173,9 @@ export function AppSidebar() {
             });
 
             if (!response.ok) {
-                throw new Error('Unable to load notifications.');
+                throw new Error(
+                    `Unable to load notifications (${response.status}).`,
+                );
             }
 
             const result: NotificationResponse = await response.json();
@@ -135,10 +184,11 @@ export function AppSidebar() {
             setUnreadCount(result.unread_count ?? 0);
         } catch (error) {
             console.error('Failed to load admin notifications:', error);
+            setNotificationError('Could not load notifications.');
         } finally {
             setLoadingNotifications(false);
         }
-    };
+    }, [isAdminArea]);
 
     useEffect(() => {
         if (!isAdminArea) return;
@@ -150,82 +200,109 @@ export function AppSidebar() {
         }, 30000);
 
         return () => window.clearInterval(interval);
-    }, [isAdminArea]);
+    }, [isAdminArea, loadNotifications]);
 
-    
     const markAsRead = async (notification: AdminNotification) => {
-        try {
-            if (!notification.read_at) {
-                const csrfToken = document
-                    .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                    ?.content;
-
+        if (!notification.read_at) {
+            try {
                 const response = await fetch(
-                    `/admin/notifications/${notification.id}/read`,
+                    `/admin/notifications/${encodeURIComponent(notification.id)}/read`,
                     {
                         method: 'PATCH',
                         credentials: 'same-origin',
-                        headers: {
-                            Accept: 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            ...(csrfToken
-                                ? { 'X-CSRF-TOKEN': csrfToken }
-                                : {}),
-                        },
+                        headers: getCsrfHeaders(),
                     },
                 );
 
                 if (!response.ok) {
                     const message = await response.text();
-                    console.error('Mark as read failed:', response.status, message);
+
+                    console.error(
+                        'Mark as read failed:',
+                        response.status,
+                        message,
+                    );
+
+                    setNotificationError(
+                        response.status === 419
+                            ? 'Your session security token expired. Refresh the page and try again.'
+                            : `Could not mark as read (${response.status}).`,
+                    );
+
                     return;
                 }
 
-                const result = await response.json();
-                setUnreadCount(result.unread_count);
+                const result: { success: boolean; unread_count: number } =
+                    await response.json();
 
                 setNotifications((current) =>
                     current.map((item) =>
                         item.id === notification.id
-                            ? { ...item, read_at: new Date().toISOString() }
+                            ? {
+                                  ...item,
+                                  read_at: new Date().toISOString(),
+                              }
                             : item,
                     ),
                 );
+
+                setUnreadCount(result.unread_count);
+                setNotificationError(null);
+            } catch (error) {
+                console.error('Failed to mark notification as read:', error);
+                setNotificationError('Could not mark notification as read.');
+                return;
             }
-
-            setNotificationsOpen(false);
-            router.visit(notification.data.url || '/admin/applications');
-        } catch (error) {
-            console.error('Failed to mark notification as read:', error);
         }
-    };
 
+        setNotificationsOpen(false);
+        router.visit(notification.data.url || '/admin/applications');
+    };
 
     const markAllAsRead = async () => {
         try {
-            const csrfToken = document
-                .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                ?.content;
+            setNotificationError(null);
 
             const response = await fetch('/admin/notifications/read-all', {
                 method: 'PATCH',
                 credentials: 'same-origin',
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    ...(csrfToken
-                        ? { 'X-CSRF-TOKEN': csrfToken }
-                        : {}),
-                },
+                headers: getCsrfHeaders(),
             });
 
             if (!response.ok) {
-                throw new Error('Unable to mark notifications as read.');
+                const message = await response.text();
+
+                console.error(
+                    'Mark all as read failed:',
+                    response.status,
+                    message,
+                );
+
+                setNotificationError(
+                    response.status === 419
+                        ? 'Your session security token expired. Refresh the page and try again.'
+                        : `Could not mark all as read (${response.status}).`,
+                );
+
+                return;
             }
 
-            await loadNotifications();
+            await response.json();
+
+            const now = new Date().toISOString();
+
+            setNotifications((current) =>
+                current.map((item) => ({
+                    ...item,
+                    read_at: item.read_at ?? now,
+                })),
+            );
+
+            setUnreadCount(0);
+            setNotificationError(null);
         } catch (error) {
             console.error('Failed to mark all notifications as read:', error);
+            setNotificationError('Could not mark all notifications as read.');
         }
     };
 
@@ -257,6 +334,7 @@ export function AppSidebar() {
                         >
                             <span className="relative">
                                 <BellRing className="size-4" />
+
                                 {unreadCount > 0 && (
                                     <span className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white">
                                         {unreadCount > 99 ? '99+' : unreadCount}
@@ -291,6 +369,15 @@ export function AppSidebar() {
                                         </button>
                                     )}
                                 </div>
+
+                                {notificationError && (
+                                    <p
+                                        role="alert"
+                                        className="border-b px-3 py-2 text-xs text-destructive"
+                                    >
+                                        {notificationError}
+                                    </p>
+                                )}
 
                                 <div className="max-h-80 overflow-y-auto">
                                     {loadingNotifications &&
